@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>따릉이 정류장 조회</title>
+
+    <style>
+      #map {
+        width: 100%; /* 너비 */
+        height: 700px; /* 높이 */
+      }
+    </style>
+
+    <script
+      type="text/javascript"
+      src="//dapi.kakao.com/v2/maps/sdk.js?appkey=04bd479933893a7050c82bf667702a4b&libraries=services"
+    ></script>
+  </head>
+  <body>
+    <h2>따릉이 정류장 조회</h2>
+    <div id="map"></div>
+
+    <script>
+      let map; // 지도 객체
+      let bounds = new kakao.maps.LatLngBounds();
+      let infowindow = null; // 인포윈도우 객체를 전역 또는 루프 외부에 선언 (이전 인포윈도우를 닫기 위해)
+
+      function setBounds() {
+        // LatLngBounds 객체에 추가된 좌표들을 기준으로 지도의 범위를 재설정합니다
+        map.setBounds(bounds);
+      }
+
+      window.onload = function () {
+        // API 스크립트 로드 완료 후 실행
+        kakao.maps.load(function () {
+          // 1. 지도 객체 생성
+          map = new kakao.maps.Map(document.getElementById("map"), {
+            center: new kakao.maps.LatLng(37.4983, 127.0286), // 초기 중심 좌표
+            level: 3, // 지도 확대 레벨
+          });
+
+          // 인포윈도우 초기화
+          infowindow = new kakao.maps.InfoWindow({ zIndex: 1 });
+
+          const url =
+            "http://openapi.seoul.go.kr:8088/556e5577436a696e38316b6950666b/json/bikeList/2001/3000/";
+
+          fetch(url)
+            .then((res) => {
+              if (!res.ok) {
+                throw new Error(`HTTP error! status: ${res.status}`);
+              }
+              return res.json();
+            })
+            .then((data) => {
+              let lists = data.rentBikeStatus.row;
+
+              lists.forEach(function (row) {
+                let coords = new kakao.maps.LatLng(
+                  row.stationLatitude,
+                  row.stationLongitude
+                );
+                bounds.extend(coords); // 경계에 좌표 추가
+
+                // 2. 마커 생성
+                const marker = new kakao.maps.Marker({
+                  map: map,
+                  position: coords,
+                  clickable: true,
+                });
+
+                // 3. 인포윈도우 콘텐츠 생성
+                const iwContent = `
+                <div style="
+                    width: 180px; 
+                    max-width: 300px;
+                    padding:5px; 
+                    font-size:12px;
+                ">
+                    <b>${row.stationName}</b><br>
+                    주차된 자전거: ${row.parkingBikeTotCnt}대
+                </div>`;
+
+                // 4. 마커에 이벤트 리스너 추가
+                kakao.maps.event.addListener(marker, "click", function () {
+                  // 현재 열려있는 인포윈도우 닫기
+                  if (infowindow.getMap()) {
+                    infowindow.close();
+                  }
+
+                  // 새 인포윈도우 내용 설정 및 열기
+                  infowindow.setContent(iwContent);
+                  infowindow.open(map, marker);
+                });
+
+                console.log(row.stationName + " 마커 생성 완료.");
+              });
+
+              moveMapToCurrentLocation();
+            })
+            .catch((error) => {
+              console.error(
+                "데이터를 가져오거나 마커를 표시하는 중 오류 발생:",
+                error
+              );
+            });
+        });
+      };
+
+      function moveMapToCurrentLocation() {
+        // 1. Geolocation API를 사용하여 현재 위치 가져오기
+        if (navigator.geolocation) {
+          // 1-1. 위치 가져오기 성공 시
+          navigator.geolocation.getCurrentPosition(
+            function (position) {
+              const lat = position.coords.latitude; // 현재 위치 위도
+              const lon = position.coords.longitude; // 현재 위치 경도
+
+              // 2. Kakao Maps 좌표 객체 생성
+              const currentPosition = new kakao.maps.LatLng(lat, lon);
+
+              // 3. 지도의 중심을 현재 위치로 이동
+              map.setCenter(currentPosition);
+
+              // 선택 사항: 현재 위치에 마커 표시
+              new kakao.maps.Marker({
+                map: map,
+                position: currentPosition,
+                image: new kakao.maps.MarkerImage(
+                  "https://cdn-icons-png.flaticon.com/512/25/25613.png", // 현재 위치를 나타내는 마커 이미지
+                  new kakao.maps.Size(32, 32)
+                ),
+              });
+
+              console.log(
+                "현재 위치로 지도를 이동했습니다. 위도:",
+                lat,
+                "경도:",
+                lon
+              );
+            },
+            function (error) {
+              // 1-2. 위치 가져오기 실패 시 (에러 처리)
+              console.error("Geolocation 에러 발생:", error.message);
+              alert(
+                "현재 위치 정보를 가져올 수 없습니다. 권한을 확인해주세요."
+              );
+            },
+            {
+              // 옵션 설정 (선택 사항)
+              enableHighAccuracy: true, // 높은 정확도 요구
+              timeout: 5000, // 5초 타임아웃
+              maximumAge: 0, // 캐시된 위치 사용 안 함
+            }
+          );
+        } else {
+          // Geolocation을 지원하지 않는 브라우저
+          alert("이 브라우저는 Geolocation을 지원하지 않습니다.");
+        }
+      }
+    </script>
+  </body>
+</html>
